@@ -6,27 +6,27 @@ class AppColors {
   static const Color primary = Color(0xFF7BA05B); // Forest green
   static const Color primaryLight = Color(0xFF9BC17A);
   static const Color primaryDark = Color(0xFF5E8043);
-  
+
   static const Color secondary = Color(0xFFE8B4A0); // Warm peach
   static const Color secondaryLight = Color(0xFFF0C7B6);
   static const Color secondaryDark = Color(0xFFD69E85);
-  
+
   static const Color accent = Color(0xFF6B9BD1); // Sky blue
   static const Color accentLight = Color(0xFF8BB0DA);
   static const Color accentDark = Color(0xFF4A7FB8);
-  
+
   static const Color background = Color(0xFFF8F6F0); // Cream white
   static const Color surface = Color(0xFFFFFFFF);
   static const Color surfaceDark = Color(0xFF2C2C2C);
-  
+
   static const Color textPrimary = Color(0xFF2D3436);
   static const Color textSecondary = Color(0xFF636E72);
   static const Color textLight = Color(0xFFDDD8D3);
-  
+
   static const Color error = Color(0xFFE17055);
   static const Color success = Color(0xFF00B894);
   static const Color warning = Color(0xFFE77F3E);
-  
+
   // Dark theme colors
   static const Color backgroundDark = Color(0xFF1A1A1A);
   static const Color primaryDarkTheme = Color(0xFF8FB86F);
@@ -119,11 +119,13 @@ class AppTheme {
         fillColor: AppColors.surface,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: AppColors.textSecondary.withOpacity(0.3)),
+          borderSide:
+              BorderSide(color: AppColors.textSecondary.withOpacity(0.3)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: AppColors.textSecondary.withOpacity(0.3)),
+          borderSide:
+              BorderSide(color: AppColors.textSecondary.withOpacity(0.3)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -133,9 +135,10 @@ class AppTheme {
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.error, width: 2),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         elevation: 4,
         shadowColor: AppColors.primary.withOpacity(0.1),
         shape: RoundedRectangleBorder(
