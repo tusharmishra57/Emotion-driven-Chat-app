@@ -1,6 +1,6 @@
 {
-    "name": "emotion_chat_app",
-    "short_name": "emotion_chat_app",
+    "name": "chat_fun_app",
+    "short_name": "chat_fun_app",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

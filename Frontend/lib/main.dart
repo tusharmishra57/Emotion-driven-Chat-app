@@ -1,19 +1,21 @@
 import 'package:flutter/material.dart';
-import 'screens/splash_screen.dart';
-import 'screens/onboarding_screen.dart';
-import 'screens/home_screen.dart';
-import 'screens/emotion_recognition_screen.dart';
-import 'screens/profile_screen.dart';
-import 'screens/settings_screen.dart';
-import 'screens/users_list_screen.dart';
-import 'screens/error_screen.dart';
-import 'screens/loading_screen.dart';
-import 'screens/notifications_screen.dart';
+import 'package:provider/provider.dart';
+import 'screens/chat/splash_screen.dart';
+import 'screens/chat/onboarding_screen.dart';
+import 'screens/chat/home_screen.dart';
+import 'screens/chat/emotion_recognition_screen.dart';
+import 'screens/chat/profile_screen.dart';
+import 'screens/chat/settings_screen.dart';
+import 'screens/chat/users_list_screen.dart';
+import 'screens/chat/error_screen.dart';
+import 'screens/chat/loading_screen.dart';
+import 'screens/chat/notifications_screen.dart';
 import 'screens/auth/welcome_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/signup_screen.dart';
 import 'screens/chat/chat_screen.dart';
 import 'theme/app_theme.dart';
+import 'providers/app_provider.dart';
 
 void main() {
   runApp(const ChatFunApp());
@@ -24,7 +26,9 @@ class ChatFunApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return ChangeNotifierProvider(
+      create: (context) => AppProvider(),
+      child: MaterialApp(
       title: 'ChatFun - Emotion-Driven Chat',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
@@ -71,6 +75,7 @@ class ChatFunApp extends StatelessWidget {
           builder: (context) => const NotFoundErrorScreen(),
         );
       },
+      ),
     );
   }
 }
