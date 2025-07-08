@@ -1,0 +1,6 @@
+Emotion-Driven Chat Application with Personalized Ghibli-Style Expression Sharing
+This project aims to redefine digital communication by enabling users to express emotions in a more personal and artistic way. Instead of using conventional emojis or static stickers, the application captures users’ real-time facial expressions through the front camera, detects the underlying emotion using AI, and transforms the result into a Ghibli-style artistic illustration. The goal is to bring authenticity, creativity, and emotion back into chat conversations.
+
+Built with Flutter for the frontend and Node.js with Socket.io for the backend, this application supports real-time text and image-based messaging. The system architecture integrates emotion detection APIs and AI-powered style transfer tools to create and send personalized visual messages. A privacy-first approach is maintained, where users are prompted with a preview of their captured emotion before deciding to share it in the chat.
+
+The app includes secure authentication, smooth chat UI, and a consistent user experience across devices. All messages, users, and emotion records are stored in MongoDB, with optional cloud storage used for image hosting. This innovative blend of emotional intelligence and digital artistry offers a fresh, engaging, and expressive way to communicate in real time.
