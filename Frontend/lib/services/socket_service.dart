@@ -1,299 +1,292 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import '../models/message.dart';
 import '../models/user.dart';
+import '../models/message.dart';
 
-class SocketService {
-  static const String serverUrl = 'http://localhost:3000';
-  static const FlutterSecureStorage _storage = FlutterSecureStorage();
+class SocketService extends ChangeNotifier {
+  static SocketService? _instance;
+  static SocketService get instance => _instance ??= SocketService._();
   
+  SocketService._();
+
+  // Use production URL for Vercel deployment
+  static const String socketUrl = 'https://chatfun-app.vercel.app';
+  // For local development, use:
+  // static const String socketUrl = 'http://localhost:3000';
+
   IO.Socket? _socket;
   bool _isConnected = false;
-  
+  String? _currentUserId;
+  String? _authToken;
+
   // Stream controllers for real-time events
-  final StreamController<Message> _messageController = StreamController<Message>.broadcast();
-  final StreamController<TypingEvent> _typingController = StreamController<TypingEvent>.broadcast();
-  final StreamController<UserStatusEvent> _userStatusController = StreamController<UserStatusEvent>.broadcast();
-  final StreamController<NotificationEvent> _notificationController = StreamController<NotificationEvent>.broadcast();
+  final _messageStreamController = StreamController<Message>.broadcast();
+  final _userJoinedStreamController = StreamController<UserJoinedEvent>.broadcast();
+  final _userOnlineStreamController = StreamController<UserOnlineEvent>.broadcast();
+  final _userOfflineStreamController = StreamController<UserOfflineEvent>.broadcast();
+  final _typingStreamController = StreamController<TypingEvent>.broadcast();
 
   // Getters for streams
-  Stream<Message> get messageStream => _messageController.stream;
-  Stream<TypingEvent> get typingStream => _typingController.stream;
-  Stream<UserStatusEvent> get userStatusStream => _userStatusController.stream;
-  Stream<NotificationEvent> get notificationStream => _notificationController.stream;
+  Stream<Message> get messageStream => _messageStreamController.stream;
+  Stream<UserJoinedEvent> get userJoinedStream => _userJoinedStreamController.stream;
+  Stream<UserOnlineEvent> get userOnlineStream => _userOnlineStreamController.stream;
+  Stream<UserOfflineEvent> get userOfflineStream => _userOfflineStreamController.stream;
+  Stream<TypingEvent> get typingStream => _typingStreamController.stream;
 
   bool get isConnected => _isConnected;
 
-  Future<void> connect() async {
-    if (_isConnected) return;
-
-    final token = await _storage.read(key: 'access_token');
-    if (token == null) {
-      throw Exception('No authentication token found');
+  Future<void> connect(String userId, String authToken) async {
+    if (_socket != null && _isConnected) {
+      await disconnect();
     }
 
-    _socket = IO.io(serverUrl, IO.OptionBuilder()
+    _currentUserId = userId;
+    _authToken = authToken;
+
+    _socket = IO.io(socketUrl, IO.OptionBuilder()
         .setTransports(['websocket'])
         .enableAutoConnect()
-        .setAuth({'token': token})
         .build());
 
-    _setupEventListeners();
+    _setupEventHandlers();
+    
     _socket!.connect();
+    
+    // Wait for connection with timeout
+    await _waitForConnection();
+    
+    // Authenticate after connection
+    _socket!.emit('authenticate', {
+      'token': authToken,
+    });
   }
 
-  void _setupEventListeners() {
-    _socket!.onConnect((_) {
-      print('Connected to server');
+  Future<void> _waitForConnection() async {
+    final completer = Completer<void>();
+    Timer? timeout;
+
+    void onConnect() {
       _isConnected = true;
-    });
+      notifyListeners();
+      if (!completer.isCompleted) {
+        completer.complete();
+      }
+      timeout?.cancel();
+    }
 
-    _socket!.onDisconnect((_) {
-      print('Disconnected from server');
+    void onError(dynamic error) {
       _isConnected = false;
-    });
+      notifyListeners();
+      if (!completer.isCompleted) {
+        completer.completeError(error);
+      }
+      timeout?.cancel();
+    }
 
-    _socket!.onConnectError((error) {
-      print('Connection error: $error');
-      _isConnected = false;
-    });
+    _socket!.on('connect', (_) => onConnect());
+    _socket!.on('connect_error', (error) => onError(error));
 
-    // Message events
-    _socket!.on('new_message', (data) {
-      try {
-        final message = Message.fromJson(data['message']);
-        _messageController.add(message);
-      } catch (e) {
-        print('Error parsing new message: $e');
+    timeout = Timer(const Duration(seconds: 10), () {
+      if (!completer.isCompleted) {
+        completer.completeError('Connection timeout');
       }
     });
 
-    // Typing events
-    _socket!.on('user_typing', (data) {
-      try {
-        final typingEvent = TypingEvent.fromJson(data);
-        _typingController.add(typingEvent);
-      } catch (e) {
-        print('Error parsing typing event: $e');
-      }
+    return completer.future;
+  }
+
+  void _setupEventHandlers() {
+    _socket!.on('connect', (_) {
+      _isConnected = true;
+      notifyListeners();
+      debugPrint('🔗 Connected to ChatFun server');
     });
 
-    // User status events
+    _socket!.on('disconnect', (_) {
+      _isConnected = false;
+      notifyListeners();
+      debugPrint('🔌 Disconnected from ChatFun server');
+    });
+
+    _socket!.on('authenticated', (data) {
+      debugPrint('✅ Socket authenticated successfully');
+    });
+
+    _socket!.on('authentication_failed', (data) {
+      debugPrint('❌ Socket authentication failed: ${data['error']}');
+    });
+
+    _socket!.on('user_joined', (data) {
+      debugPrint('🎉 User joined: ${data['user']['name']}');
+      final event = UserJoinedEvent.fromJson(data);
+      _userJoinedStreamController.add(event);
+    });
+
     _socket!.on('user_online', (data) {
-      try {
-        final event = UserStatusEvent(
-          userId: data['userId'],
-          user: User.fromJson(data['user']),
-          isOnline: true,
-        );
-        _userStatusController.add(event);
-      } catch (e) {
-        print('Error parsing user online event: $e');
-      }
+      debugPrint('🟢 User online: ${data['name']}');
+      final event = UserOnlineEvent.fromJson(data);
+      _userOnlineStreamController.add(event);
     });
 
     _socket!.on('user_offline', (data) {
+      debugPrint('🔴 User offline: ${data['name']}');
+      final event = UserOfflineEvent.fromJson(data);
+      _userOfflineStreamController.add(event);
+    });
+
+    _socket!.on('new_message', (data) {
+      debugPrint('💬 New message received');
       try {
-        final event = UserStatusEvent(
-          userId: data['userId'],
-          isOnline: false,
-          lastSeen: DateTime.parse(data['lastSeen']),
-        );
-        _userStatusController.add(event);
+        final message = Message.fromJson(data['message']);
+        _messageStreamController.add(message);
       } catch (e) {
-        print('Error parsing user offline event: $e');
+        debugPrint('Error parsing message: $e');
       }
     });
 
-    // Friend request events
-    _socket!.on('friend_request_received', (data) {
-      try {
-        final event = NotificationEvent(
-          type: 'friend_request',
-          data: data,
-        );
-        _notificationController.add(event);
-      } catch (e) {
-        print('Error parsing friend request event: $e');
-      }
+    _socket!.on('user_typing', (data) {
+      debugPrint('⌨️ User typing: ${data['name']}');
+      final event = TypingEvent.fromJson(data);
+      _typingStreamController.add(event);
     });
 
-    // Emotion sharing events
-    _socket!.on('emotion_shared', (data) {
-      try {
-        final event = NotificationEvent(
-          type: 'emotion_shared',
-          data: data,
-        );
-        _notificationController.add(event);
-      } catch (e) {
-        print('Error parsing emotion shared event: $e');
-      }
-    });
-
-    // Message reactions
-    _socket!.on('message_reaction', (data) {
-      // Handle message reaction updates
-      print('Message reaction: $data');
-    });
-
-    // Messages read
-    _socket!.on('messages_read', (data) {
-      // Handle messages read status
-      print('Messages read: $data');
-    });
-
-    // Error handling
-    _socket!.on('error', (data) {
-      print('Socket error: $data');
+    _socket!.on('error', (error) {
+      debugPrint('❌ Socket error: $error');
     });
   }
 
-  // Chat operations
+  // Chat methods
   void joinChat(String chatId) {
-    if (_isConnected) {
+    if (_socket != null && _isConnected) {
       _socket!.emit('join_chat', {'chatId': chatId});
+      debugPrint('📨 Joined chat: $chatId');
     }
   }
 
   void leaveChat(String chatId) {
-    if (_isConnected) {
+    if (_socket != null && _isConnected) {
       _socket!.emit('leave_chat', {'chatId': chatId});
-    }
-  }
-
-  void sendMessage({
-    required String chatId,
-    required Map<String, dynamic> content,
-    required String type,
-    String? replyTo,
-  }) {
-    if (_isConnected) {
-      _socket!.emit('send_message', {
-        'chatId': chatId,
-        'content': content,
-        'type': type,
-        'replyTo': replyTo,
-      });
+      debugPrint('📤 Left chat: $chatId');
     }
   }
 
   void startTyping(String chatId) {
-    if (_isConnected) {
+    if (_socket != null && _isConnected) {
       _socket!.emit('typing_start', {'chatId': chatId});
     }
   }
 
   void stopTyping(String chatId) {
-    if (_isConnected) {
+    if (_socket != null && _isConnected) {
       _socket!.emit('typing_stop', {'chatId': chatId});
     }
   }
 
-  void addReaction({
-    required String messageId,
-    required String emoji,
-  }) {
-    if (_isConnected) {
-      _socket!.emit('add_reaction', {
-        'messageId': messageId,
-        'emoji': emoji,
-      });
-    }
-  }
-
-  void markMessagesRead(String chatId) {
-    if (_isConnected) {
-      _socket!.emit('mark_messages_read', {'chatId': chatId});
-    }
-  }
-
-  // Friend operations
-  void sendFriendRequest(String targetUserId) {
-    if (_isConnected) {
-      _socket!.emit('send_friend_request', {'targetUserId': targetUserId});
-    }
-  }
-
-  // Emotion operations
-  void shareEmotion({
-    required String emotionId,
-    required List<String> recipients,
-  }) {
-    if (_isConnected) {
-      _socket!.emit('share_emotion', {
-        'emotionId': emotionId,
-        'recipients': recipients,
-      });
-    }
-  }
-
-  // Notification operations
-  void markNotificationRead(String notificationId) {
-    if (_isConnected) {
-      _socket!.emit('mark_notification_read', {'notificationId': notificationId});
-    }
-  }
-
-  void disconnect() {
+  Future<void> disconnect() async {
     if (_socket != null) {
       _socket!.disconnect();
       _socket!.dispose();
       _socket = null;
-      _isConnected = false;
     }
+    _isConnected = false;
+    _currentUserId = null;
+    _authToken = null;
+    notifyListeners();
   }
 
+  @override
   void dispose() {
     disconnect();
-    _messageController.close();
-    _typingController.close();
-    _userStatusController.close();
-    _notificationController.close();
+    _messageStreamController.close();
+    _userJoinedStreamController.close();
+    _userOnlineStreamController.close();
+    _userOfflineStreamController.close();
+    _typingStreamController.close();
+    super.dispose();
+  }
+}
+
+// Event classes
+class UserJoinedEvent {
+  final User user;
+  final String message;
+  final DateTime timestamp;
+
+  UserJoinedEvent({
+    required this.user,
+    required this.message,
+    required this.timestamp,
+  });
+
+  factory UserJoinedEvent.fromJson(Map<String, dynamic> json) {
+    return UserJoinedEvent(
+      user: User.fromJson(json['user']),
+      message: json['message'],
+      timestamp: DateTime.parse(json['timestamp']),
+    );
+  }
+}
+
+class UserOnlineEvent {
+  final String userId;
+  final String name;
+  final DateTime timestamp;
+
+  UserOnlineEvent({
+    required this.userId,
+    required this.name,
+    required this.timestamp,
+  });
+
+  factory UserOnlineEvent.fromJson(Map<String, dynamic> json) {
+    return UserOnlineEvent(
+      userId: json['userId'],
+      name: json['name'],
+      timestamp: DateTime.parse(json['timestamp']),
+    );
+  }
+}
+
+class UserOfflineEvent {
+  final String userId;
+  final String name;
+  final DateTime timestamp;
+
+  UserOfflineEvent({
+    required this.userId,
+    required this.name,
+    required this.timestamp,
+  });
+
+  factory UserOfflineEvent.fromJson(Map<String, dynamic> json) {
+    return UserOfflineEvent(
+      userId: json['userId'],
+      name: json['name'],
+      timestamp: DateTime.parse(json['timestamp']),
+    );
   }
 }
 
 class TypingEvent {
+  final String userId;
+  final String name;
   final String chatId;
-  final User user;
   final bool isTyping;
 
   TypingEvent({
+    required this.userId,
+    required this.name,
     required this.chatId,
-    required this.user,
     required this.isTyping,
   });
 
   factory TypingEvent.fromJson(Map<String, dynamic> json) {
     return TypingEvent(
+      userId: json['userId'],
+      name: json['name'],
       chatId: json['chatId'],
-      user: User.fromJson(json['user']),
       isTyping: json['isTyping'],
     );
   }
-}
-
-class UserStatusEvent {
-  final String userId;
-  final User? user;
-  final bool isOnline;
-  final DateTime? lastSeen;
-
-  UserStatusEvent({
-    required this.userId,
-    this.user,
-    required this.isOnline,
-    this.lastSeen,
-  });
-}
-
-class NotificationEvent {
-  final String type;
-  final Map<String, dynamic> data;
-
-  NotificationEvent({
-    required this.type,
-    required this.data,
-  });
 }
